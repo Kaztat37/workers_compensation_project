@@ -171,18 +171,32 @@ SLIDES: list[str] = [
 
 # CSS-override, который инжектится прямо в первый слайд:
 #
-# 1. ``.reveal.fade { opacity: 1 !important; }`` — критическое исправление:
-#    в iframe streamlit-reveal-slides подгружается bootstrap.min.css, в нём
-#    есть утилита-класс ``.fade:not(.show) { opacity: 0; }``. Когда Reveal.js
-#    включает fade-переход, он добавляет класс ``fade`` корневому элементу
-#    ``.reveal`` — Bootstrap тут же делает его прозрачным, и весь слайд
-#    становится чёрным. Селектор ``.reveal.fade`` специфичнее одиночного
-#    ``.fade``, плюс ``!important`` гарантированно перебивает Bootstrap.
+# 1. ``.reveal section[hidden] { display: block !important; }`` — главное
+#    исправление переходов. В iframe streamlit-reveal-slides помимо CSS
+#    Reveal.js загружен ещё bootstrap.min.css. У него есть правило
+#    ``[hidden] { display: none !important; }``. Reveal.js же на каждый
+#    .past/.future-слайд добавляет HTML-атрибут ``hidden`` (для accessibility),
+#    а сам слайд остаётся в потоке через инлайн-стиль ``display: block`` —
+#    именно так Reveal анимирует transform/opacity у уходящего и приходящего
+#    слайдов. Bootstrap своим ``!important`` перебивает инлайн-стиль, слайд
+#    выпадает из layout (``display: none``), и НИКАКАЯ анимация (slide / fade
+#    / convex / zoom) визуально не происходит — слайды просто мгновенно
+#    переключаются. Возвращаем ``display: block`` для section[hidden] внутри
+#    .reveal — и переходы наконец становятся видимыми.
 #
-# 2. h1/h2 — нивелируем uppercase + крупный шрифт у «цветных» тем
+# 2. ``.reveal.fade { opacity: 1 !important; }`` — Bootstrap также имеет
+#    утилиту ``.fade:not(.show) { opacity: 0; }``. Когда Reveal.js включает
+#    fade-переход, он добавляет класс ``fade`` корневому элементу ``.reveal``
+#    — Bootstrap тут же делает его прозрачным, и весь слайд становится
+#    чёрным. Селектор ``.reveal.fade`` специфичнее одиночного ``.fade``,
+#    плюс ``!important`` гарантированно перебивает Bootstrap.
+#
+# 3. h1/h2 — нивелируем uppercase + крупный шрифт у «цветных» тем
 #    (beige, league, dracula, blood, sky, night, …), чтобы длинные русские
 #    заголовки не вылезали за края слайда.
 SLIDE_STYLE_BLOCK = """<style>
+.reveal .slides > section[hidden],
+.reveal .slides > section > section[hidden] { display: block !important; }
 .reveal.fade { opacity: 1 !important; }
 .reveal h1 {
   font-size: 1.9em !important;
