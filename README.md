@@ -43,6 +43,8 @@ workers_compensation_project/
 ├── data/                      # Кеш датасета (создаётся при первом запуске)
 │   └── workers_compensation.csv
 └── README.md
+└── video/
+    └── demo.mp4
 ```
 
 ## Установка и запуск
