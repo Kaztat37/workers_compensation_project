@@ -54,7 +54,7 @@ workers_compensation_project/
 
 1. Клонируйте репозиторий:
    ```bash
-   git clone <ссылка-на-репозиторий>
+   git clone https://github.com/Kaztat37/workers_compensation_project.git
    cd workers_compensation_project
    ```
 
