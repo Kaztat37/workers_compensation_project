@@ -58,6 +58,7 @@ AVAILABLE_THEMES = [
 
 # Виды переходов Reveal.js (передаются per-slide через data-transition).
 AVAILABLE_TRANSITIONS = ["none", "fade", "slide", "convex", "concave", "zoom"]
+AVAILABLE_TRANSITION_SPEEDS = ["default", "fast", "slow"]
 
 # Плагины Reveal.js, доступные в встроенной сборке streamlit-reveal-slides.
 # Ключ — то, что видит пользователь; значение — имя плагина для Reveal.
@@ -215,28 +216,35 @@ SLIDE_STYLE_BLOCK = """<style>
 </style>"""
 
 
-def build_markdown(transition: str) -> str:
+def build_markdown(transition: str, transition_speed: str) -> str:
     """Собирает итоговый markdown.
 
     На каждом слайде в начало добавляется директива
-    ``<!-- .slide: data-transition="X" -->`` — благодаря этому Reveal.js
-    использует выбранный пользователем эффект перехода для конкретной
-    секции (глобальный конфиг применяется только на mount, и Streamlit
-    после смены настроек не всегда полностью пересоздаёт компонент).
+    ``<!-- .slide: data-transition="X" data-transition-speed="Y" -->`` —
+    благодаря этому Reveal.js использует выбранный пользователем эффект
+    перехода для конкретной секции (глобальный конфиг применяется только
+    на mount, и Streamlit после смены настроек не всегда полностью
+    пересоздаёт компонент).
 
-    На первом слайде директива не ставится — слайд должен просто появиться
-    без анимации входа. Заодно туда мерджится :data:`SLIDE_STYLE_BLOCK` с
+    Директива ставится также на первый слайд, чтобы переход «назад» с
+    второго слайда на первый тоже использовал выбранную анимацию (Reveal
+    при таком переходе берёт data-transition с **целевой** секции).
+
+    В первый слайд дополнительно мерджится :data:`SLIDE_STYLE_BLOCK` с
     CSS-фиксами (важнее всего — нивелирование bootstrap-овского
-    ``.fade { opacity: 0 }``, который иначе делает чёрный слайд при
-    fade-переходе). Блок встраивается в первый слайд, а не идёт отдельной
-    секцией, чтобы не появлялся пустой слайд в начале.
+    ``.fade:not(.show) { opacity: 0 }``, который иначе делает чёрный
+    слайд при fade-переходе). Блок встраивается в первый слайд, а не
+    идёт отдельной секцией, чтобы не появлялся пустой слайд в начале.
     """
 
-    transition_directive = f'<!-- .slide: data-transition="{transition}" -->'
+    transition_directive = (
+        f'<!-- .slide: data-transition="{transition}" '
+        f'data-transition-speed="{transition_speed}" -->'
+    )
     parts: list[str] = []
     for index, slide_md in enumerate(SLIDES):
         if index == 0:
-            prefix = f"{SLIDE_STYLE_BLOCK}\n\n"
+            prefix = f"{SLIDE_STYLE_BLOCK}\n\n{transition_directive}\n\n"
         else:
             prefix = f"{transition_directive}\n\n"
         parts.append(prefix + slide_md.strip())
@@ -279,6 +287,17 @@ def presentation_page() -> None:
                 "меняет анимацию (а не только глобальный конфиг Reveal)."
             ),
         )
+        transition_speed = st.selectbox(
+            "Скорость перехода",
+            AVAILABLE_TRANSITION_SPEEDS,
+            index=AVAILABLE_TRANSITION_SPEEDS.index("slow"),
+            help=(
+                "`fast` ≈ 0.2с, `default` ≈ 0.4с, `slow` ≈ 1с. "
+                "При коротком переходе fade/zoom могут визуально "
+                "восприниматься как простое перелистывание — "
+                "включите `slow`, чтобы анимация была заметна."
+            ),
+        )
         selected_plugin_labels = st.multiselect(
             "Плагины Reveal.js",
             options=list(PLUGIN_OPTIONS.keys()),
@@ -302,7 +321,7 @@ def presentation_page() -> None:
             "презентацию как обычный Markdown.\nУстановите его командой "
             "`pip install streamlit-reveal-slides`."
         )
-        st.markdown(build_markdown(transition))
+        st.markdown(build_markdown(transition, transition_speed))
         return
 
     plugins = [PLUGIN_OPTIONS[label] for label in selected_plugin_labels]
@@ -310,22 +329,23 @@ def presentation_page() -> None:
     # Ключ зависит от всех настроек — при их изменении Streamlit ремонтирует
     # компонент и Reveal.js инициализируется заново. Без этого Reveal.configure()
     # не успевает применить новый список плагинов.
-    component_key = "slides-{theme}-{height}-{transition}-{plugins}".format(
+    component_key = "slides-{theme}-{height}-{transition}-{speed}-{plugins}".format(
         theme=theme,
         height=int(height),
         transition=transition,
+        speed=transition_speed,
         plugins=",".join(sorted(plugins)) or "none",
     )
 
     rs.slides(
-        build_markdown(transition),
+        build_markdown(transition, transition_speed),
         height=int(height),
         theme=theme,
         config={
             # Глобально дублируем выбранный transition, но в конечном счёте
             # перевешивает per-slide data-transition, заданный в build_markdown.
             "transition": transition,
-            "transitionSpeed": "default",
+            "transitionSpeed": transition_speed,
             "plugins": plugins,
             "controls": True,
             "progress": True,
