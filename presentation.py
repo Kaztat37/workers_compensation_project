@@ -1,17 +1,28 @@
 """Страница презентации проекта (streamlit-reveal-slides).
 
 Все переключатели в сайдбаре действительно переинициализируют слайды:
-- Тема — выбирается из списка CSS, которые поставляются вместе с пакетом.
-- Высота слайдов — пересчитывается при ресайзе iframe.
-- Переход — передаётся в config Reveal.js.
-- Плагины — отображаемые имена мапятся на реальные ключи Reveal
-  (`RevealHighlight`, `RevealSearch`, `RevealNotes`, `RevealZoom`,
-  `RevealMath.KaTeX`).
 
-Чтобы изменения переходов и плагинов гарантированно применялись, мы
-передаём в `rs.slides(...)` параметр `key`, зависящий от текущих настроек:
-при его изменении Streamlit ремонтирует компонент, и Reveal.js
-инициализируется заново с новыми параметрами.
+- **Тема** — выбирается из списка CSS, которые поставляются с пакетом
+  streamlit-reveal-slides (см. ``frontend/build/static/css/``).
+- **Высота слайдов** — пересчитывается при ресайзе iframe.
+- **Переход** — прописывается **per-slide** через директиву
+  ``<!-- .slide: data-transition="X" -->`` в начале каждого слайда.
+  Это надёжнее, чем глобальный ``Reveal.configure({transition})``: эта
+  встроенная сборка компонента вызывает ``Reveal.initialize(...)`` только
+  один раз на mount, поэтому глобальный ``transition`` после первого
+  рендера не пересоздаёт CSS-классы у уже отрисованных секций.
+- **Плагины** — отображаемые имена мапятся на реальные ключи Reveal
+  (``RevealHighlight``, ``RevealSearch``, ``RevealNotes``, ``RevealZoom``,
+  ``RevealMath.KaTeX``).
+
+Чтобы изменения переходов и плагинов гарантированно применялись, в
+``rs.slides(...)`` передаётся параметр ``key``, зависящий от текущих
+настроек: при его изменении Streamlit ремонтирует компонент.
+
+Дополнительно на каждом рендере в начало markdown инжектируется блок
+``<style>``: он отключает агрессивный ``text-transform: uppercase`` и
+крупный шрифт ``h1`` у тем вроде beige / league / dracula, из-за которых
+длинные русские заголовки на 1-м слайде не помещались в кадр.
 """
 
 from __future__ import annotations
@@ -45,7 +56,7 @@ AVAILABLE_THEMES = [
     "white-contrast",
 ]
 
-# Виды переходов Reveal.js (передаются в config).
+# Виды переходов Reveal.js (передаются per-slide через data-transition).
 AVAILABLE_TRANSITIONS = ["none", "fade", "slide", "convex", "concave", "zoom"]
 
 # Плагины Reveal.js, доступные в встроенной сборке streamlit-reveal-slides.
@@ -59,74 +70,177 @@ PLUGIN_OPTIONS: dict[str, str] = {
 }
 
 
-PRESENTATION_MARKDOWN = r"""
-# Прогнозирование стоимости страховых выплат
-### Workers Compensation · UltimateIncurredClaimCost
----
-## Введение
-- Анализ данных о страховых случаях компенсации работникам.
-- Цель — предсказать **итоговую** стоимость страхового возмещения.
-- Датасет: Workers Compensation (OpenML id = 42876, **100 000** записей).
----
-## Бизнес-задача
-- Страховые компании нуждаются в точной оценке будущих выплат.
-- Начальная оценка (`InitialCaseEstimate`) часто отличается от итоговой.
-- Точные прогнозы помогают формировать резервы и тарифицировать риски.
----
-## Описание данных
-- 13 признаков + целевая переменная `UltimateIncurredClaimCost`.
-- Категориальные: `Gender`, `MaritalStatus`, `PartTimeFullTime`, `ClaimDescription`.
-- Datetime: `DateTimeOfAccident`, `DateReported`.
-- Числовые: возраст, зарплата, часы, начальная оценка и др.
----
-## Этапы работы
-1. Загрузка данных через `sklearn.datasets.fetch_openml`.
-2. Предобработка: даты → `AccidentMonth`, `AccidentDayOfWeek`, `ReportingDelay`.
-3. `LabelEncoder` для категорий, `StandardScaler` для числовых.
-4. `train_test_split` 80/20.
-5. Обучение Linear / Ridge / Random Forest / XGBoost.
-6. Оценка MAE, MSE, RMSE, R² и анализ важности признаков.
----
-## Пример формулы для KaTeX
-Среднеквадратичная ошибка:
-$$\mathrm{RMSE} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}$$
-> 💡 Чтобы формула отрисовалась, включите плагин «Формулы KaTeX (math)».
----
-## Пример блока кода (highlight)
-```python
-from sklearn.ensemble import RandomForestRegressor
+# Содержание презентации в виде списка слайдов. Это нужно, чтобы
+# программно дописывать к каждому слайду директиву data-transition,
+# которая по факту определяет визуальный эффект перехода.
+SLIDES: list[str] = [
+    # 1 — титульный
+    (
+        "# Прогноз стоимости страховых выплат\n"
+        "#### Workers Compensation · UltimateIncurredClaimCost"
+    ),
+    # 2 — введение
+    (
+        "## Введение\n"
+        "- Анализ данных о страховых случаях компенсации работникам.\n"
+        "- Цель — предсказать **итоговую** стоимость страхового возмещения.\n"
+        "- Датасет: Workers Compensation (OpenML id = 42876, **100 000** записей)."
+    ),
+    # 3 — бизнес-задача
+    (
+        "## Бизнес-задача\n"
+        "- Страховые компании нуждаются в точной оценке будущих выплат.\n"
+        "- Начальная оценка (`InitialCaseEstimate`) часто отличается от итоговой.\n"
+        "- Точные прогнозы помогают формировать резервы и тарифицировать риски."
+    ),
+    # 4 — описание данных
+    (
+        "## Описание данных\n"
+        "- 13 признаков + целевая переменная `UltimateIncurredClaimCost`.\n"
+        "- Категориальные: `Gender`, `MaritalStatus`, `PartTimeFullTime`, "
+        "`ClaimDescription`.\n"
+        "- Datetime: `DateTimeOfAccident`, `DateReported`.\n"
+        "- Числовые: возраст, зарплата, часы, начальная оценка и др."
+    ),
+    # 5 — этапы работы
+    (
+        "## Этапы работы\n"
+        "1. Загрузка данных через `sklearn.datasets.fetch_openml`.\n"
+        "2. Предобработка: даты → `AccidentMonth`, `AccidentDayOfWeek`, `ReportingDelay`.\n"
+        "3. `LabelEncoder` для категорий, `StandardScaler` для числовых.\n"
+        "4. `train_test_split` 80 / 20.\n"
+        "5. Обучение Linear / Ridge / Random Forest / XGBoost.\n"
+        "6. Оценка MAE, MSE, RMSE, R² и анализ важности признаков."
+    ),
+    # 6 — пример формулы
+    (
+        "## Пример формулы для KaTeX\n"
+        "Среднеквадратичная ошибка:\n\n"
+        r"$$\mathrm{RMSE} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}$$"
+        "\n\n"
+        "> 💡 Чтобы формула отрисовалась, включите плагин «Формулы KaTeX (math)»."
+    ),
+    # 7 — пример кода
+    (
+        "## Пример блока кода (highlight)\n"
+        "```python\n"
+        "from sklearn.ensemble import RandomForestRegressor\n\n"
+        "model = RandomForestRegressor(n_estimators=100, random_state=42)\n"
+        "model.fit(X_train, y_train)\n"
+        "preds = model.predict(X_test)\n"
+        "```\n"
+        "> 💡 Включите плагин «Подсветка кода (highlight)», чтобы код подсветился."
+    ),
+    # 8 — ключевые признаки
+    (
+        "## Ключевые признаки\n"
+        "- **InitialCaseEstimate** — обычно №1 по важности.\n"
+        "- **WeeklyPay**, **Age**, **HoursWorkedPerWeek**.\n"
+        "- **ReportingDelay** — задержка отчёта о случае.\n"
+        "- **ClaimDescription** — тип травмы."
+    ),
+    # 9 — сравнение моделей
+    (
+        "## Сравнение моделей\n\n"
+        "| Модель              | Сильные стороны                              |\n"
+        "|---------------------|----------------------------------------------|\n"
+        "| Linear Regression   | Простота, интерпретируемость                 |\n"
+        "| Ridge Regression    | Регуляризация, мультиколлинеарность          |\n"
+        "| Random Forest       | Устойчивость, нелинейности, важность фич     |\n"
+        "| XGBoost             | Высокая точность, регуляризация              |"
+    ),
+    # 10 — Streamlit-приложение
+    (
+        "## Streamlit-приложение\n"
+        "- Многостраничное приложение на `st.navigation` + `st.Page`.\n"
+        "- Загрузка данных, обучение и метрики «в один клик».\n"
+        "- Графики: распределение цели, предсказания vs факт, важность признаков.\n"
+        "- Форма для интерактивного предсказания одного случая."
+    ),
+    # 11 — заключение
+    (
+        "## Заключение\n"
+        "- Лучшая модель в среднем — Random Forest / XGBoost.\n"
+        "- Возможные улучшения: log-преобразование цели, hyperparameter tuning,\n"
+        "  стэкинг моделей.\n"
+        "- Приложение готово к интеграции в страховой workflow."
+    ),
+]
 
-model = RandomForestRegressor(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
-preds = model.predict(X_test)
-```
-> 💡 Включите плагин «Подсветка кода (highlight)», чтобы код подсветился.
----
-## Ключевые признаки
-- **InitialCaseEstimate** — обычно №1 по важности.
-- **WeeklyPay**, **Age**, **HoursWorkedPerWeek**.
-- **ReportingDelay** — задержка отчёта о случае.
-- **ClaimDescription** — тип травмы.
----
-## Сравнение моделей
-| Модель              | Сильные стороны                              |
-|---------------------|----------------------------------------------|
-| Linear Regression   | Простота, интерпретируемость                 |
-| Ridge Regression    | Регуляризация, мультиколлинеарность          |
-| Random Forest       | Устойчивость, нелинейности, важность фич     |
-| XGBoost             | Высокая точность, регуляризация              |
----
-## Streamlit-приложение
-- Многостраничное приложение на `st.navigation` + `st.Page`.
-- Загрузка данных, обучение и метрики «в один клик».
-- Графики: распределение цели, предсказания vs факт, важность признаков.
-- Форма для интерактивного предсказания одного случая.
----
-## Заключение
-- Лучшая модель в среднем — Random Forest / XGBoost.
-- Возможные улучшения: log-преобразование цели, hyperparameter tuning, стэкинг.
-- Приложение готово к интеграции в страховой workflow.
-"""
+
+# CSS-override, который инжектится прямо в первый слайд:
+#
+# 1. ``.reveal.fade { opacity: 1 !important; }`` — критическое исправление:
+#    в iframe streamlit-reveal-slides подгружается bootstrap.min.css, в нём
+#    есть утилита-класс ``.fade:not(.show) { opacity: 0; }``. Когда Reveal.js
+#    включает fade-переход, он добавляет класс ``fade`` корневому элементу
+#    ``.reveal`` — Bootstrap тут же делает его прозрачным, и весь слайд
+#    становится чёрным. Селектор ``.reveal.fade`` специфичнее одиночного
+#    ``.fade``, плюс ``!important`` гарантированно перебивает Bootstrap.
+#
+# 2. h1/h2 — нивелируем uppercase + крупный шрифт у «цветных» тем
+#    (beige, league, dracula, blood, sky, night, …), чтобы длинные русские
+#    заголовки не вылезали за края слайда.
+SLIDE_STYLE_BLOCK = """<style>
+.reveal.fade { opacity: 1 !important; }
+.reveal h1 {
+  font-size: 1.9em !important;
+  text-transform: none !important;
+  word-break: keep-all;
+  hyphens: manual;
+  line-height: 1.1;
+}
+.reveal h2 {
+  font-size: 1.55em !important;
+  text-transform: none !important;
+  word-break: keep-all;
+  line-height: 1.15;
+}
+.reveal h3, .reveal h4, .reveal h5 {
+  text-transform: none !important;
+}
+.reveal section {
+  font-size: 0.9em;
+}
+.reveal pre {
+  font-size: 0.55em;
+}
+.reveal pre code {
+  max-height: 380px;
+}
+.reveal table {
+  font-size: 0.7em;
+  margin: 0 auto;
+}
+</style>"""
+
+
+def build_markdown(transition: str) -> str:
+    """Собирает итоговый markdown.
+
+    На каждом слайде в начало добавляется директива
+    ``<!-- .slide: data-transition="X" -->`` — благодаря этому Reveal.js
+    использует выбранный пользователем эффект перехода для конкретной
+    секции (глобальный конфиг применяется только на mount, и Streamlit
+    после смены настроек не всегда полностью пересоздаёт компонент).
+
+    На первом слайде директива не ставится — слайд должен просто появиться
+    без анимации входа. Заодно туда мерджится :data:`SLIDE_STYLE_BLOCK` с
+    CSS-фиксами (важнее всего — нивелирование bootstrap-овского
+    ``.fade { opacity: 0 }``, который иначе делает чёрный слайд при
+    fade-переходе). Блок встраивается в первый слайд, а не идёт отдельной
+    секцией, чтобы не появлялся пустой слайд в начале.
+    """
+
+    transition_directive = f'<!-- .slide: data-transition="{transition}" -->'
+    parts: list[str] = []
+    for index, slide_md in enumerate(SLIDES):
+        if index == 0:
+            prefix = f"{SLIDE_STYLE_BLOCK}\n\n"
+        else:
+            prefix = f"{transition_directive}\n\n"
+        parts.append(prefix + slide_md.strip())
+    return "\n\n---\n\n".join(parts)
 
 
 def presentation_page() -> None:
@@ -159,6 +273,11 @@ def presentation_page() -> None:
             "Переход между слайдами",
             AVAILABLE_TRANSITIONS,
             index=AVAILABLE_TRANSITIONS.index("slide"),
+            help=(
+                "Прописывается **в каждый слайд** через директиву "
+                "data-transition — поэтому переключение действительно "
+                "меняет анимацию (а не только глобальный конфиг Reveal)."
+            ),
         )
         selected_plugin_labels = st.multiselect(
             "Плагины Reveal.js",
@@ -183,14 +302,14 @@ def presentation_page() -> None:
             "презентацию как обычный Markdown.\nУстановите его командой "
             "`pip install streamlit-reveal-slides`."
         )
-        st.markdown(PRESENTATION_MARKDOWN)
+        st.markdown(build_markdown(transition))
         return
 
     plugins = [PLUGIN_OPTIONS[label] for label in selected_plugin_labels]
 
     # Ключ зависит от всех настроек — при их изменении Streamlit ремонтирует
     # компонент и Reveal.js инициализируется заново. Без этого Reveal.configure()
-    # не успевает применить новый список плагинов / перехода.
+    # не успевает применить новый список плагинов.
     component_key = "slides-{theme}-{height}-{transition}-{plugins}".format(
         theme=theme,
         height=int(height),
@@ -199,19 +318,20 @@ def presentation_page() -> None:
     )
 
     rs.slides(
-        PRESENTATION_MARKDOWN,
+        build_markdown(transition),
         height=int(height),
         theme=theme,
         config={
+            # Глобально дублируем выбранный transition, но в конечном счёте
+            # перевешивает per-slide data-transition, заданный в build_markdown.
             "transition": transition,
+            "transitionSpeed": "default",
             "plugins": plugins,
-            # Дополнительные параметры Reveal, которые приятно иметь:
             "controls": True,
             "progress": True,
             "history": False,
             "center": True,
             "slideNumber": "c/t",
-            "transitionSpeed": "default",
         },
         markdown_props={"data-separator-vertical": "^--$"},
         key=component_key,
