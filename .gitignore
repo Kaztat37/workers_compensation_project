@@ -1,0 +1,62 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+develop-eggs/
+.installed.cfg
+.Python
+
+# --- Виртуальные окружения ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Тесты / типы / линтеры ---
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.tox/
+.nox/
+
+# --- Streamlit ---
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+
+# --- Кеш OpenML / HuggingFace и т.п. ---
+.cache/
+.openml/
+
+# --- Кеш данных проекта ---
+# Локально загруженный CSV (восстанавливается через fetch_openml).
+# Закомментируйте строку, если хотите коммитить сам датасет.
+data/workers_compensation.csv
+
+# --- IDE / редакторы ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- ОС ---
+.DS_Store
+Thumbs.db
+
+# --- Артефакты обучения ---
+*.pkl
+*.joblib
+*.h5
+*.onnx
+mlruns/
+wandb/
